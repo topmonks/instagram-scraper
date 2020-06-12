@@ -190,6 +190,10 @@ async function main() {
             await Apify.pushData(result);
             return;
         }
+        const contentType = response.headers()['content-type'];
+        if (!contentType.includes('application/json')) {
+            return;
+        }
         const json = await response.json();
         let result;
         if (json.graphql) {
