@@ -10,12 +10,15 @@ const { getItemSpec, parseExtendOutputFunction } = require('./helpers');
 const { GRAPHQL_ENDPOINT, ABORT_RESOURCE_TYPES, ABORT_RESOURCE_URL_INCLUDES, ABORT_RESOURCE_URL_DOWNLOAD_JS, SCRAPE_TYPES, PAGE_TYPES } = require('./consts');
 const { initQueryIds } = require('./query_ids');
 const errors = require('./errors');
+const { formatProfileOutput, formatSinglePost } = require('./details');
 
 async function main() {
     const input = await Apify.getInput();
+    const matcherUsername = /instagram\.com\/(?<username>[A-Za-z0-9-_\.]+)/;
     const {
         proxy,
         resultsType,
+        useAjson,
         resultsLimit = 200,
         scrapePostsUntilDate,
         scrollWaitSecs = 15,
@@ -71,7 +74,7 @@ async function main() {
     if (Array.isArray(directUrls) && directUrls.length > 0) {
         Apify.utils.log.warning('Search is disabled when Direct URLs are used');
         requestListSources = directUrls.map((url) => ({
-            url,
+            url: useAjson ? `${url}?__a=1` : url,
             userData: { limit: resultsLimit, scrapePostsUntilDate },
         }));
     } else {
@@ -90,6 +93,13 @@ async function main() {
     const requestList = await Apify.openRequestList('request-list', requestListSources);
 
     let cookies = loginCookies;
+
+    const gotoAjsonFunction = async ({ request, page }) => {
+        const response = await page.goto(request.url, {
+            timeout: pageTimeout * 1000,
+        });
+        return response;
+    };
 
     const gotoFunction = async ({ request, page }) => {
         await page.setBypassCSP(true);
@@ -169,9 +179,51 @@ async function main() {
         return response;
     };
 
+    const handleAjsonPageFunction = async ({ page, puppeteerPool, request, response }) => {
+        const match = request.url.match(matcherUsername);
+        if (response.status() === 404) {
+            const result = {
+                url: request.url,
+                found: false,
+                ...match.groups,
+            };
+            Apify.utils.log.error(`Page "${request.url}" does not exist.`);
+            await Apify.pushData(result);
+            return;
+        }
+        const contentType = response.headers()['content-type'];
+        if (!contentType.includes('application/json')) {
+            Apify.utils.log.error(`Page "${request.url}" is not a JSON`);
+            const screenshotBuffer = await page.screenshot({fullPage: true});
+            const fileName = `screen-${match[1]}`;
+            await Apify.setValue(fileName, screenshotBuffer, {
+                contentType: 'image/png',
+            });
+            return;
+        }
+        const json = await response.json();
+        let result;
+        if (json.graphql) {
+            if (json.graphql.user) {
+                result = await formatProfileOutput(input, request, json.graphql.user, page, {}, {});
+            } else if (json.graphql.shortcode_media) {
+                result = await formatSinglePost(json.graphql.shortcode_media);
+            }
+        }
+        await Apify.pushData(result);
+    };
+
     const handlePageFunction = async ({ page, puppeteerPool, request, response }) => {
         if (response.status() === 404) {
             Apify.utils.log.error(`Page "${request.url}" does not exist.`);
+            if (request.url.match(matcherUsername)) {
+                const result = {
+                    url: request.url,
+                    found: false,
+                    ...request.url.match(matcherUsername).groups,
+                };
+                await Apify.pushData(result);
+            }
             return;
         }
         const error = await page.$('body.p-error');
@@ -231,7 +283,7 @@ async function main() {
     const crawler = new Apify.PuppeteerCrawler({
         requestList,
         requestQueue,
-        gotoFunction,
+        gotoFunction: useAjson ? gotoAjsonFunction : gotoFunction,
         maxRequestRetries,
         puppeteerPoolOptions: {
             maxOpenPagesPerInstance: 1,
@@ -246,7 +298,7 @@ async function main() {
         },
         maxConcurrency: 100,
         handlePageTimeoutSecs: 300 * 60, // Ex: 5 hours to crawl thousands of comments
-        handlePageFunction,
+        handlePageFunction: useAjson ? handleAjsonPageFunction : handlePageFunction,
 
         // If request failed 4 times then this function is executed.
         handleFailedRequestFunction: async ({ request }) => {
