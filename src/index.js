@@ -187,11 +187,13 @@ async function main() {
                 found: false,
                 ...match.groups,
             };
+            Apify.utils.log.error(`Page "${request.url}" does not exist.`);
             await Apify.pushData(result);
             return;
         }
         const contentType = response.headers()['content-type'];
         if (!contentType.includes('application/json')) {
+            Apify.utils.log.error(`Page "${request.url}" is not a JSON`);
             const screenshotBuffer = await page.screenshot({fullPage: true});
             const fileName = `screen-${match[1]}`;
             await Apify.setValue(fileName, screenshotBuffer, {
