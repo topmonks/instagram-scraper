@@ -180,8 +180,8 @@ async function main() {
     };
 
     const handleAjsonPageFunction = async ({ page, puppeteerPool, request, response }) => {
+        const match = request.url.match(matcherUsername);
         if (response.status() === 404) {
-            const match = request.url.match(matcherUsername);
             const result = {
                 url: request.url,
                 found: false,
@@ -193,7 +193,7 @@ async function main() {
         const contentType = response.headers()['content-type'];
         if (!contentType.includes('application/json')) {
             const screenshotBuffer = await page.screenshot({fullPage: true});
-            const fileName = 'screen';
+            const fileName = `screen-${match[1]}`;
             await Apify.setValue(fileName, screenshotBuffer, {
                 contentType: 'image/png',
             });
