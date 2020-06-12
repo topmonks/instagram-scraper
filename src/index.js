@@ -192,6 +192,11 @@ async function main() {
         }
         const contentType = response.headers()['content-type'];
         if (!contentType.includes('application/json')) {
+            const screenshotBuffer = await page.screenshot({fullPage: true});
+            const fileName = 'screen';
+            await Apify.setValue(fileName, screenshotBuffer, {
+                contentType: 'image/png',
+            });
             return;
         }
         const json = await response.json();
@@ -285,7 +290,7 @@ async function main() {
         launchPuppeteerOptions: {
             ...proxy,
             stealth: true,
-            useChrome: !useAjson,
+            useChrome: true,
             ignoreHTTPSErrors: true,
             args: ['--enable-features=NetworkService', '--ignore-certificate-errors'],
         },
