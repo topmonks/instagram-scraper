@@ -180,6 +180,16 @@ async function main() {
     };
 
     const handleAjsonPageFunction = async ({ page, puppeteerPool, request, response }) => {
+        if (response.status() === 404) {
+            const match = request.url.match(matcherUsername);
+            const result = {
+                url: request.url,
+                found: false,
+                ...match.groups,
+            };
+            await Apify.pushData(result);
+            return;
+        }
         const json = await response.json();
         let result;
         if (json.graphql) {
@@ -188,13 +198,6 @@ async function main() {
             } else if (json.graphql.shortcode_media) {
                 result = await formatSinglePost(json.graphql.shortcode_media);
             }
-        } else {
-            const match = request.url.match(matcherUsername);
-            result = {
-                url: request.url,
-                found: false,
-                ...match.groups,
-            };
         }
         await Apify.pushData(result);
     };
