@@ -200,4 +200,5 @@ const scrapeDetails = async ({ input, request, itemSpec, entryData, page, proxy,
 module.exports = {
     scrapeDetails,
     formatSinglePost,
+    formatProfileOutput,
 };
