@@ -106,11 +106,11 @@ const scrapePosts = async ({ page, itemSpec, entryData, scrollingState, puppetee
         }
     }
 
-    if (itemSpec.pageType === PAGE_TYPES.PLACE) {
+    if (itemSpec.pageType === PAGE_TYPES.PLACE || itemSpec.pageType === PAGE_TYPES.HASHTAG) {
         const el = await page.$('.EZdmt');
         if (!el) {
-            log(itemSpec, `Place/location page didn't load properly, trying again...`, LOG_TYPES.ERROR);
-            throw new Error(`Place/location page didn't load properly, trying again...`);
+            log(itemSpec, `Place/location or hashtag page didn't load properly, trying again...`, LOG_TYPES.ERROR);
+            throw new Error(`Place/location or hashtag page didn't load properly, trying again...`);
         }
     }
 
@@ -161,12 +161,14 @@ const scrapePosts = async ({ page, itemSpec, entryData, scrollingState, puppetee
                 scrollingState,
                 getItemsFromGraphQLFn: getPostsFromGraphQL,
                 type: 'posts',
+                puppeteerPool,
             });
         }
     } else {
         // We have to forcefully close the browser here because it hangs sometimes for some listeners reasons
         // Because we always have max one page per browser, this is fine
         await puppeteerPool.retire(page.browser());
+        return;
     }
 };
 

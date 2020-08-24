@@ -35,10 +35,9 @@ In the future, this solution will be extended with following features:
 - Scraping and download of Instagram photos
 
 ## Bugs, fixes, updates and changelog
-This scraper is under active development. We hope to clear most issues in upcoming month plus implement new features as we go.
-
-Check [CHANGELOG.md](https://github.com/gippy/instagram-scraper/blob/master/CHANGELOG.md) for more detailed information
-2020-06-12 - Big update with many fixes and new features
+This scraper is under active development. Check [CHANGELOG.md](https://github.com/gippy/instagram-scraper/blob/master/CHANGELOG.md) for more detailed information
+- 2020-07-02 - Scraping places/locations now requires login.
+- 2020-06-12 - Big update with many fixes and new features
 
 ## Instagram blocking and proxies
 In May 2020, Instagram significantly upgraded their anti-scraping protection, banning most datacenter proxies worldwide. Many of the previously working solutions were completely blocked by redirecting the pages into login wall. Currently, the only reliable solution to this problem is to use residential proxies. Datacenter proxies may still work but likely in less than 10% of cases.

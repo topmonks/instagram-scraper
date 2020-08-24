@@ -6,7 +6,7 @@ const { scrapePosts, handlePostsGraphQLResponse, scrapePost } = require('./posts
 const { scrapeComments, handleCommentsGraphQLResponse }  = require('./comments');
 const { scrapeDetails }  = require('./details');
 const { searchUrls } = require('./search');
-const { getItemSpec, parseExtendOutputFunction } = require('./helpers');
+const { getItemSpec, parseExtendOutputFunction, getPageTypeFromUrl } = require('./helpers');
 const { GRAPHQL_ENDPOINT, ABORT_RESOURCE_TYPES, ABORT_RESOURCE_URL_INCLUDES, ABORT_RESOURCE_URL_DOWNLOAD_JS, SCRAPE_TYPES, PAGE_TYPES } = require('./consts');
 const { initQueryIds } = require('./query_ids');
 const errors = require('./errors');
@@ -41,12 +41,13 @@ async function main() {
     let maxConcurrency = 1000;
 
     const usingLogin = loginCookies && Array.isArray(loginCookies);
+    let proxySession;
 
     if (usingLogin) {
         Apify.utils.log.warning('Cookies were used, setting maxConcurrency to 1 and using one proxy session!');
         maxConcurrency = 1;
         const session = crypto.createHash('sha256').update(JSON.stringify(loginCookies)).digest('hex').substring(0,16)
-        if (proxy.useApifyProxy) proxy.apifyProxySession = `insta_session_${session}`;
+        if (proxy.useApifyProxy) proxySession = proxy.apifyProxySession = `insta_session_${session}`;
     }
 
     try {
@@ -67,20 +68,24 @@ async function main() {
         Apify.utils.log.warning('You are using Apify proxy but not residential group! It is very likely it will not work properly. Please contact support@apify.com for access to residential proxy.')
     }
 
-    let requestListSources;
+    let urls;
     if (Array.isArray(directUrls) && directUrls.length > 0) {
         Apify.utils.log.warning('Search is disabled when Direct URLs are used');
-        requestListSources = directUrls.map((url) => ({
-            url,
-            userData: { limit: resultsLimit, scrapePostsUntilDate },
-        }));
+        urls = directUrls
     } else {
-        const urlsWithTypes = await searchUrls(input);
-        requestListSources = urlsWithTypes.map((urlObj) => ({
-            url: urlObj.url,
-            userData: { limit: resultsLimit, scrapePostsUntilDate, pageType: urlObj.pageType },
-        }));
+        urls = await searchUrls(input, proxy ? Apify.getApifyProxyUrl({ groups: proxy.apifyProxyGroups, session: proxySession }) : undefined);
     }
+
+    const requestListSources = urls.map((url) => ({
+        url,
+        userData: {
+            // TODO: This should be the only page type we ever need, remove the one from entryData
+            pageType: getPageTypeFromUrl(url),
+        },
+    }));
+
+    Apify.utils.log.info(`Parsed start URLs:`);
+    console.dir(requestListSources);
 
     if (requestListSources.length === 0) {
         Apify.utils.log.info('No URLs to process');
@@ -108,6 +113,7 @@ async function main() {
         Apify.utils.log.debug(`Is scroll page: ${isScrollPage}`);
 
         const { pageType } = request.userData;
+        Apify.utils.log.info(`Opening page type: ${pageType} on ${request.url}`);
 
         page.on('request', (req) => {
             // We need to load some JS when we want to scroll
@@ -122,10 +128,10 @@ async function main() {
                 || ABORT_RESOURCE_URL_INCLUDES.some((urlMatch) => req.url().includes(urlMatch))
                 || (isJSBundle && abortJSBundle)
             ) {
-                Apify.utils.log.debug(`Aborting url: ${req.url()}`);
+                // Apify.utils.log.debug(`Aborting url: ${req.url()}`);
                 return req.abort();
             }
-            Apify.utils.log.debug(`Processing url: ${req.url()}`);
+            // Apify.utils.log.debug(`Processing url: ${req.url()}`);
             req.continue();
         });
 
@@ -160,10 +166,13 @@ async function main() {
         if (usingLogin) {
             try {
                 const viewerId = await page.evaluate(() => window._sharedData.config.viewerId);
-                if (!viewerId) throw new Error('Failed to log in using cookies, they are probably no longer usable and you need to set new ones.');
+                if (!viewerId) {
+                    Apify.utils.log.error('Failed to log in using cookies, they are probably no longer usable and you need to set new ones.');
+                    process.exit(1);
+                }
             } catch (loginError) {
-                Apify.utils.log.error(loginError.message);
-                process.exit(1);
+                Apify.utils.log.error(loginError);
+                throw new Error(`Page didn't load properly with login, retrying...`);
             }
         }
         return response;
@@ -194,8 +203,8 @@ async function main() {
 
         const itemSpec = getItemSpec(entryData);
         // Passing the limit around
-        itemSpec.limit = request.userData.limit || 999999;
-        itemSpec.scrapePostsUntilDate = request.userData.scrapePostsUntilDate;
+        itemSpec.limit = resultsLimit || 999999;
+        itemSpec.scrapePostsUntilDate = scrapePostsUntilDate;
         itemSpec.input = input;
         itemSpec.scrollWaitSecs = scrollWaitSecs;
 
@@ -245,7 +254,7 @@ async function main() {
         launchPuppeteerOptions: {
             ...proxy,
             stealth: true,
-            useChrome: true,
+            useChrome: Apify.isAtHome(),
             ignoreHTTPSErrors: true,
             args: ['--enable-features=NetworkService', '--ignore-certificate-errors'],
         },

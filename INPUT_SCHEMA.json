@@ -17,7 +17,7 @@
             "description": "What type of pages to search (you can search hashtags, profiles and places)",
             "editor": "select",
             "enum": ["user", "hashtag", "place"],
-            "enumTitles": ["Search users", "Search hashtags", "Search places"],
+            "enumTitles": ["Search users", "Search hashtags", "Search places (scrolls only with login)"],
             "default": "hashtag"
         },
         "searchLimit": {
@@ -32,7 +32,7 @@
         "directUrls": {
             "title": "Direct Instagram page URLs",
             "type": "array",
-            "description": "If you already have URL(s) of page(s) you wish to scrape, you can set them here. <br /><br /><strong>This field is optional, but this field or 'Search' must be provided</strong>",
+            "description": "If you already have URL(s) of page(s) you wish to scrape, you can set them here. <br /><br /><strong>This field is optional, but this field or 'Search' must be provided</strong>. Location URLs scroll only with login.",
             "editor": "stringList",
             "placeholderValue": "URL",
             "patternValue": "https:\\/\\/www\\.instagram\\.com\\/.+",
@@ -98,8 +98,8 @@
             "editor": "number",
             "unit": "likes",
             "default": 0,
-            "sectionCaption": "Additional data loaded from detail pages",
-            "sectionDescription": "If limits in this section are set above 0, then when the solution enters a page, it attempts to load the specified items until the limit is reached. All of the options below require login credentials."
+            "sectionCaption": "Followers, following, likes",
+            "sectionDescription": "Features that require login. If limits in this section are set above 0, then when the solution enters a page, it attempts to load the specified items until the limit is reached. "
         },
         "followingLimit": {
             "title": "Get profile following",

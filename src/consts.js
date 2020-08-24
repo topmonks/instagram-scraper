@@ -26,6 +26,12 @@ module.exports = {
         USER: 'user',
         HASHTAG: 'hashtag',
     },
+    PAGE_TYPE_URL_REGEXES: {
+        PLACE: /https:\/\/www\.instagram\.com\/explore\/locations\/.+/,
+        PROFILE: /https:\/\/www\.instagram\.com\/[^/]{2,}\/?$/,
+        HASHTAG: /https:\/\/www\.instagram\.com\/explore\/tags\/.+/,
+        POST: /https:\/\/www\.instagram.com\/p\/.+/,
+    },
     // Instagrams GraphQL Endpoint URL
     GRAPHQL_ENDPOINT: 'https://www.instagram.com/graphql/query/?query_hash=',
     // Resource types blocked from loading to speed up the solution

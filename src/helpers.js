@@ -6,7 +6,15 @@ const safeEval = require('safe-eval');
 const { URLSearchParams } = require('url');
 const errors = require('./errors');
 const { expandOwnerDetails } = require('./user-details');
-const { PAGE_TYPES, GRAPHQL_ENDPOINT, LOG_TYPES } = require('./consts');
+const { PAGE_TYPES, GRAPHQL_ENDPOINT, LOG_TYPES, PAGE_TYPE_URL_REGEXES } = require('./consts');
+
+const getPageTypeFromUrl = (url) => {
+    for (const [pageType, regex] of Object.entries(PAGE_TYPE_URL_REGEXES)) {
+        if (url.match(regex)) {
+            return PAGE_TYPES[pageType];
+        }
+    }
+}
 
 /**
  * Takes object from _sharedData.entry_data and parses it into simpler object
@@ -234,7 +242,7 @@ function parseCaption (caption) {
     return { hashtags, mentions };
 }
 
-function hasReachedLastPostDate (scrapePostsUntilDate, lastPostDate) {
+function hasReachedLastPostDate (scrapePostsUntilDate, lastPostDate, itemSpec) {
     const lastPostDateAsDate = new Date(lastPostDate);
     if (scrapePostsUntilDate) {
         // We want to continue scraping (return true) if the scrapePostsUntilDate is older (smaller) than the date of the last post
@@ -242,7 +250,7 @@ function hasReachedLastPostDate (scrapePostsUntilDate, lastPostDate) {
         scrapePostsUntilDateAsDate = new Date(scrapePostsUntilDate);
         const willContinue = scrapePostsUntilDateAsDate < lastPostDateAsDate;
         if (!willContinue) {
-            console.warn(`Reached post with older date than our limit: ${lastPostDateAsDate}. Finishing scrolling...`);
+            log(itemSpec, `Reached post with older date than our limit: ${lastPostDateAsDate}. Finishing scrolling...`, LOG_TYPES.WARNING);
             return true;
         }
     }
@@ -266,7 +274,7 @@ async function filterPushedItemsAndUpdateState ({ items, itemSpec, parsingFn, sc
             log(itemSpec, `Reached user provided limit of ${limit} results, stopping...`);
             break;
         }
-        if (scrapePostsUntilDate && hasReachedLastPostDate(scrapePostsUntilDate, item.timestamp)) {
+        if (scrapePostsUntilDate && hasReachedLastPostDate(scrapePostsUntilDate, item.timestamp, itemSpec)) {
             scrollingState[itemSpec.id].reachedLastPostDate = true;
             break;
         }
@@ -456,6 +464,7 @@ const finiteScroll = async (context) => {
         scrollingState,
         getItemsFromGraphQLFn,
         type,
+        puppeteerPool,
     } = context;
     // console.log('starting finite scroll');
     const oldItemCount = Object.keys(scrollingState[itemSpec.id].ids).length;
@@ -472,6 +481,8 @@ const finiteScroll = async (context) => {
         if (!hasNextPage) {
             log(itemSpec, `Cannot find new page of scrolling, storing last page dump to KV store`, LOG_TYPES.WARNING);
             await Apify.setValue(`LAST-PAGE-DUMP-${itemSpec.id}`, data);
+            // We have to do these retires because the browser sometimes hang on, should be fixable with something else though
+            await puppeteerPool.retire(page.browser());
             return
         };
     }
@@ -499,10 +510,14 @@ const finiteScroll = async (context) => {
 
     if (doContinue) {
         await finiteScroll(context);
+    } else {
+        await puppeteerPool.retire(page.browser());
+        return
     }
 };
 
 module.exports = {
+    getPageTypeFromUrl,
     getItemSpec,
     getCheckedVariable,
     log,
